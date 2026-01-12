@@ -1,0 +1,126 @@
+Hacking Guidelines
+==================
+
+This document is an introduction to hacking on GnuCash.
+
+Related Documents
+-----------------
+
+In addition to this file, you should read the README file, which
+explains the details of getting the git source, building GnuCash,
+and creating patches for submission.
+
+Coding Style Conventions
+------------------------
+Please refer to https://wiki.gnucash.org/wiki/CodingStandard.
+
+==============
+TIPS AND HINTS
+==============
+
+Building GnuCash in-tree
+------------------------
+This is generally discouraged. You should always use a separate build directory,
+preferably outside of the source directory. If you really want a build directory
+inside your source directory, make it a hidden one (starting with a '.'), to
+keep intltool from incorrectly picking up translatable strings from the build directory.
+
+Starting GnuCash from the build tree
+------------------------------------
+This should mostly work, but there may be corner cases where it behaves differently from
+running gnucash from the target installation directory. You can tell cmake which
+install directory to use via the command line switch '-DCMAKE_INSTALL_PREFIX='
+Don't use '/usr' or '/usr/local' unless you're a package maintainer for a distro.
+Instead choose /opt/gnc/git/ or even $HOME/gnc/git (or something similar).
+
+Getting Trace Messages From GnuCash
+-----------------------------------
+See the doxygen comments in libgnucash/engine/qoflog.h (and .c)
+
+Starting GnuCash in GDB
+-----------------------
+To run gdb on an installed version of gnucash (installed in /opt/gnc/unstable:)
+
+    % gdb /opt/gnc/unstable/bin/gnucash
+
+You'll also probably want to know about these:
+
+    gdb> catch fork
+    gdb> set follow-fork-mode child
+
+-----
+It may be the case that running GDB from within emacs doesn't work for you,
+with the following error:
+
+[C-u M-x gdb /opt/gnucash-cvs/bin/gnucash
+ ...in buffer *gud-gdb*:]
+
+    (gdb) attach <pid>
+
+jsled needed to re-define a gud.el function as such:
+
+  (defun gud-gdb-massage-args (file args)
+    (let ((l (copy-list args)))
+      (nconc l (list "-cd" (expand-file-name default-directory) "-fullname"))))
+
+jsled does not need the above with emacs-22, thankfully.  It was getting quite tiresome.
+
+
+Using Electric Fence with GnuCash
+---------------------------------
+There are currently no rules in our build system to build and run gnucash
+or unit tests with Electric Fence.
+
+It should probably be relatively straightforward to add this as all it
+needs is to link with libefence.so (-lefence).
+
+Fedora 27 ships an ElectricFence package containing that library and also
+an executable 'ef' to run an arbitrary program with Electric Fence
+guarding enabled. I have given it a quick spin on gnucash but it immediately
+crashes. I haven't investigated whether this is because I should first have
+linked gnucash with -lefence or because a real problem in GnuCash code.
+
+
+Using Valgrind/Callgrind with GnuCash
+-------------------------------------
+This section has been moved to
+https://wiki.gnucash.org/wiki/Coder_Tools
+
+
+Look up exported and imported symbols
+-------------------------------------
+These commands may be useful to find out the library that actually
+exported a particular symbol, and to check which import symbol one
+particular library depends upon and where they are imported
+from. Run these from the top-level of the build tree.
+Note "lib64" below should be "lib" for a 32-bit build.
+
+# Create a table of all exported symbols and where they come from
+nm -A `find . -name '*.so'` | grep ' T ' | \
+  sed 's/^\([^:]*\).* \([^ ]*\)$/\1: \2/' > exportedsymbols
+
+# For a particular library, check symbol import requirements, 
+# listing all symbols (needs the file from above)
+A=lib64/libgnc-module.so && echo "$A requirements:" \
+  && nm $A | grep ' U ' | sed 's/^.* \([^ ]*\)$/\1/' | \
+  grep -wFf- exportedsymbols
+
+# For a particular library, check import requirements, 
+# summarized by library
+A=lib64/libgnc-module.so && echo "$A requirements:" \
+  && nm $A | grep ' U ' | sed 's/^.* \([^ ]*\)$/\1/' | \
+  grep -wFf- exportedsymbols | cut -d: -f1 | sort | uniq
+
+# For a particular library, check import requirements, 
+# summarized by library, formatted for a cmake TARGET_LINK_LIBRARIES command
+A=lib64/libgnc-gnome.so && echo "$A target link libraries:" \
+  && nm $A | grep ' U ' | sed 's/^.* \([^ ]*\)$/\1/' | \
+  grep -wFf- exportedsymbols | cut -d: -f1 | sort | uniq | \
+  sed 's!.*/lib!  !' | sed 's/.so$//'
+
+# List all import requirements summarized by library for a full
+# recursive directory tree
+for A in `find lib64 -name '*.so'`; do \
+  echo -e "\n##$A requirements:" && nm $A | grep ' U ' | \
+  sed 's/^.* \([^ ]*\)$/\1/' | grep -wFf- exportedsymbols | \
+  cut -d: -f1 | sort | uniq; done

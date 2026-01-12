@@ -1,0 +1,14 @@
+-*-text-*-
+
+This directory contains assorted stock quote scripts.
+
+finance-quote-wrapper.in:
+
+  Source file for finance-quote-wrapper which is a perl script that
+  allows gnucash to communicate with Finance::Quote.
+  The requests and responses are in json format.
+
+gnc-fq-update.in:
+
+  Source file for gnc-fq-update which is a perl script that updates
+  Finance::Quote from CPAN.

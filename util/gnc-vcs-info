@@ -1,0 +1,118 @@
+#!/bin/sh
+#
+# Usage:
+#   gnc-vcs-info -r <srcdir>
+#   gnc-vcs-info -d <srcdir>
+#   gnc-vcs-info -t <srcdir>
+#
+# With -r prints the revision number to stdout and exits 0 on success
+# With -d prints the commit date to stdout and exits 0 on success
+# With -t prints the vcs type that was detected to stdout and exits 0
+#         on success.
+#
+# Exits with errorcode 1 if we're not in a git work tree
+#
+# Written By:  Derek Atkins <derek@ihtfp.com>
+# Updated By:  Geert Janssens <geert@kobaltwit.be>
+#
+# $Id$
+
+# Default string to return if not invoked properly
+usage="Usage: $0 -r <srcdir>
+       $0 -d <srcdir>
+       $0 -t <srcdir>"
+
+# Print an error message and then exit
+my_die()
+{
+  echo "$1"
+  exit 1
+}
+
+if [ "$BUILDING_FROM_VCS" = "0" -o \
+     "$BUILDING_FROM_VCS" = "no" -o \
+     "$BUILDING_FROM_VCS" = "false" ]; then
+  # Something outside of the Gnucash build system knows that we
+  # are NOT building from a git work tree.
+  # We should believe it (needed by packagers that maintain the
+  # packaging code in git too)
+  echo "Environment variable BUILDING_FROM_VCS=$BUILDING_FROM_VCS" >&2
+  exit 1
+fi
+
+# Make sure we have a srcdir
+[ -n "$1" ] || my_die "$usage"
+[ -n "$2" ] || my_die "$usage"
+[ -d "$2" ] || my_die "$0: $2: not a directory"
+
+
+if [ "$1" = "-t" ]
+then
+  request="type"
+elif [ "$1" = "-r" ]
+then
+  request="revision"
+elif [ "$1" = "-d" ]
+then
+  request="date"
+else
+  my_die "$usage"
+fi
+
+srcdir=$2
+
+# Find the real srcdir.
+# This handles the case of a symlink (lndir) tree
+# $real_srcdir will hold the actual source dir
+if test -h "$srcdir"/CMakeLists.txt
+then 
+  tmp_srcdir=`readlink "$srcdir"/CMakeLists.txt`
+  real_srcdir="$srcdir/`dirname ${tmp_srcdir}`"
+else
+  real_srcdir="$srcdir"
+fi
+
+# Test if this code is in a git worktree
+real_gitdir="${real_srcdir}"/.git
+if test -d "${real_gitdir}" || test -e "${real_gitdir}"
+then
+  # If we're only interested in the vcs type, then we're done here
+  if [ "$request" = "type" ]
+  then
+    echo "git"
+    exit 0
+  fi
+
+  # The windows build uses environment variable $GIT_CMD to invoke git (adding git
+  # to the PATH in Windows results in a build failure).
+  # So for platform independence, use GIT_CMD for all
+  [ -n "$GIT_CMD" ] || GIT_CMD=git
+  if [ "$request" = "date" ]
+  then
+    exec "$GIT_CMD" --git-dir "${real_gitdir}" log -1 --format=%cd --date=short
+    exit 0
+  fi
+
+  githead=$("$GIT_CMD" --git-dir "${real_gitdir}" describe 2>/dev/null)
+  rc=$?
+  if [ $rc != 0 ]; then
+    # On travis describe seems to fail due to missing tags in the git clone the system takes
+    # So specifically to catch those errors, use only the short commit hash as a backup
+    githead=$("$GIT_CMD" --git-dir "${real_gitdir}" log -1 --pretty=format:"%h" HEAD 2>/dev/null)
+    rc=$?
+  fi
+  if [ $rc = 0 ]; then
+    # Add a "+" to the hash if there deleted or modified files (not excluded by .gitignore and friends)
+    modified=""
+    # "Ignores" untracked files
+    # [ $("$GIT_CMD" --git-dir "${real_gitdir}" ls-files -dkm 2>/dev/null | wc -l) -gt 0 ] && modified="+"
+    # Includes untracked files
+    [ $("$GIT_CMD" --git-dir "${real_gitdir}" ls-files -dkmo --exclude-standard 2>/dev/null | wc -l) -gt 0 ] && modified="+"
+    echo ${githead}${modified}
+    exit 0
+  else
+    exit 1
+  fi
+else
+  exit 1
+fi

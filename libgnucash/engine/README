@@ -1,0 +1,18 @@
+
+This directory contains code for the accounting engine.
+Its fairly clean but far from perfect, and it certainly
+lacks advanced features.
+
+There should be no GUI code in this subdirectory, and,
+ideally, it should build cleanly and independently of 
+any GUI elements or assumptions.
+
+For design documentation, please read our doxygen documentation.
+This can be found at https://code.gnucash.org/docs/STABLE/
+Alternatively you can build it yourself by running
+ [ninja|make] doc
+The result will be found in
+{builddir}/libgnucash/doc/html/index.html
+
+The same information can mostly be found directly in the header
+files in this directory as well (though in marked up source format).
