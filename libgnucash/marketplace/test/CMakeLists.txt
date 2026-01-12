@@ -4,15 +4,21 @@ set(test_marketplace_SOURCES
     gtest-marketplace.cpp
 )
 
-add_executable(gtest-marketplace ${test_marketplace_SOURCES})
+# Check if GTest is available
+find_package(GTest)
 
-target_link_libraries(gtest-marketplace
-    gnc-marketplace
-    gnc-engine
-    gnc-opencog
-    gtest
-    gtest_main
-    pthread
-)
+if(GTEST_FOUND)
+    add_executable(gtest-marketplace ${test_marketplace_SOURCES})
 
-add_test(NAME gtest-marketplace COMMAND gtest-marketplace)
+    target_link_libraries(gtest-marketplace
+        gnc-marketplace
+        gnc-opencog
+        GTest::GTest
+        GTest::Main
+        Threads::Threads
+    )
+
+    add_test(NAME gtest-marketplace COMMAND gtest-marketplace)
+else()
+    message(STATUS "GTest not found, skipping marketplace tests")
+endif()
