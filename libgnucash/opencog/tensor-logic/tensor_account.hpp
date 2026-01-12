@@ -139,6 +139,14 @@ public:
     }
 
     /**
+     * Get balance for specific entity, period, currency.
+     */
+    double get_balance(size_t entity, size_t period, size_t currency) const
+    {
+        return get_metric(entity, period, currency, Metrics::BALANCE);
+    }
+
+    /**
      * Get time series for a specific entity and currency.
      */
     DoubleTensor get_time_series(size_t entity, size_t currency, size_t metric) const

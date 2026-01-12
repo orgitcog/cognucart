@@ -253,6 +253,7 @@ public:
     // =========================================
 
     const Shape& shape() const { return m_shape; }
+    const Shape& sizes() const { return m_shape; }  // Alias for PyTorch compatibility
     const Strides& strides() const { return m_strides; }
     size_t ndim() const { return m_shape.size(); }
     size_t size() const { return compute_size(m_shape); }
@@ -277,6 +278,23 @@ public:
     const T& at(const std::vector<size_t>& indices) const
     {
         return (*m_storage)[compute_offset(indices)];
+    }
+
+    /**
+     * Access element by flat index (bounds-checked).
+     */
+    T& at(size_t idx)
+    {
+        if (idx >= size())
+            throw std::out_of_range("Index out of range");
+        return (*m_storage)[m_offset + idx];
+    }
+
+    const T& at(size_t idx) const
+    {
+        if (idx >= size())
+            throw std::out_of_range("Index out of range");
+        return (*m_storage)[m_offset + idx];
     }
 
     /**

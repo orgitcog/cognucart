@@ -129,19 +129,21 @@ public:
 
     /**
      * Import account data from GnuCash.
+     * Returns true if account exists and data was imported.
      */
-    void import_account_data(const std::string& guid, size_t entity, size_t period,
+    bool import_account_data(const std::string& guid, size_t entity, size_t period,
                             size_t currency, double balance, double debit_flow,
                             double credit_flow)
     {
         auto account = get_account(guid);
-        if (!account) return;
+        if (!account) return false;
 
         account->set_metric(entity, period, currency, TensorAccount::Metrics::BALANCE, balance);
         account->set_metric(entity, period, currency, TensorAccount::Metrics::DEBIT_FLOW, debit_flow);
         account->set_metric(entity, period, currency, TensorAccount::Metrics::CREDIT_FLOW, credit_flow);
         account->set_metric(entity, period, currency, TensorAccount::Metrics::NET_FLOW,
                            credit_flow - debit_flow);
+        return true;
     }
 
     // =========================================

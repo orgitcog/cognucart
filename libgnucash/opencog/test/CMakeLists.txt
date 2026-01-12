@@ -7,6 +7,13 @@ set(OPENCOG_TEST_SOURCES
     gtest-atenspace.cpp
     gtest-tensor-logic.cpp
     gtest-cognitive-engine.cpp
+    gtest-cogutil.cpp
+    gtest-atomspace-exhaustive.cpp
+    gtest-pattern-exhaustive.cpp
+    gtest-aten-exhaustive.cpp
+    gtest-atenspace-exhaustive.cpp
+    gtest-tensor-logic-exhaustive.cpp
+    gtest-cognitive-exhaustive.cpp
 )
 
 # Find Google Test

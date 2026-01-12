@@ -152,23 +152,23 @@ TEST_F(ATenSpaceTest, ComputeAttention)
     auto node1 = space.add_tensor_node(AtomTypes::ACCOUNT_NODE, "Account1");
     auto node2 = space.add_tensor_node(AtomTypes::ACCOUNT_NODE, "Account2");
     auto node3 = space.add_tensor_node(AtomTypes::ACCOUNT_NODE, "Account3");
-    
+
     // Set embeddings
     space.set_embedding(node1, EmbeddingType::SEMANTIC, DoubleTensor({1.0, 0.0, 0.0}));
     space.set_embedding(node2, EmbeddingType::SEMANTIC, DoubleTensor({0.9, 0.1, 0.0}));
     space.set_embedding(node3, EmbeddingType::SEMANTIC, DoubleTensor({0.0, 1.0, 0.0}));
-    
-    std::vector<std::shared_ptr<TensorAtom>> atoms = {node1, node2, node3};
+
+    std::vector<std::shared_ptr<TensorNode>> atoms = {node1, node2, node3};
     auto query = DoubleTensor({1.0, 0.0, 0.0});
-    
+
     auto attention = space.compute_attention(atoms, query, EmbeddingType::SEMANTIC);
-    
+
     EXPECT_EQ(attention.size(), 3);
-    
+
     // Attention should sum to 1
     double sum = attention.sum();
     EXPECT_NEAR(sum, 1.0, 1e-6);
-    
+
     // node1 should have highest attention (most similar to query)
     EXPECT_GT(attention.at(0), attention.at(2));
 }
@@ -177,15 +177,15 @@ TEST_F(ATenSpaceTest, AttentionAggregate)
 {
     auto node1 = space.add_tensor_node(AtomTypes::ACCOUNT_NODE, "Account1");
     auto node2 = space.add_tensor_node(AtomTypes::ACCOUNT_NODE, "Account2");
-    
+
     space.set_embedding(node1, EmbeddingType::SEMANTIC, DoubleTensor({1.0, 0.0}));
     space.set_embedding(node2, EmbeddingType::SEMANTIC, DoubleTensor({0.0, 1.0}));
-    
-    std::vector<std::shared_ptr<TensorAtom>> atoms = {node1, node2};
+
+    std::vector<std::shared_ptr<TensorNode>> atoms = {node1, node2};
     auto query = DoubleTensor({1.0, 0.0});
-    
+
     auto aggregated = space.attention_aggregate(atoms, query, EmbeddingType::SEMANTIC);
-    
+
     EXPECT_EQ(aggregated.size(), 2);
 }
 

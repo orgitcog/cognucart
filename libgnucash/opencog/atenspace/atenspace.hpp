@@ -71,6 +71,16 @@ public:
     }
 
     /**
+     * Add a tensor-enabled link with variadic arguments.
+     */
+    template<typename... Handles>
+    std::shared_ptr<TensorLink> add_tensor_link(AtomType type, Handles&&... handles)
+    {
+        HandleSeq outgoing{std::forward<Handles>(handles)...};
+        return add_tensor_link(type, outgoing);
+    }
+
+    /**
      * Set embedding for a node.
      */
     void set_embedding(const Handle& atom, EmbeddingType type, const DoubleTensor& tensor)
@@ -80,6 +90,21 @@ public:
             tn->set_embedding(type, tensor);
             update_embedding_index(atom, type);
         }
+    }
+
+    /**
+     * Get embedding for an atom.
+     */
+    std::optional<DoubleTensor> get_embedding(const Handle& atom, EmbeddingType type) const
+    {
+        auto* tn = dynamic_cast<TensorNode*>(atom.get());
+        if (tn) {
+            auto emb = tn->get_embedding(type);
+            if (emb) {
+                return emb->tensor();
+            }
+        }
+        return std::nullopt;
     }
 
     /**
@@ -137,13 +162,111 @@ public:
     }
 
     /**
+     * Generate temporal embedding for a node based on time information.
+     */
+    DoubleTensor generate_temporal_embedding(const Handle& atom, size_t period, size_t total_periods)
+    {
+        std::vector<double> data(m_config.temporal_dim, 0.0);
+
+        // Cyclical encoding of period
+        double period_ratio = static_cast<double>(period) / total_periods;
+        data[0] = std::sin(2.0 * M_PI * period_ratio);
+        data[1] = std::cos(2.0 * M_PI * period_ratio);
+
+        // Position encoding
+        for (size_t i = 2; i < m_config.temporal_dim; ++i) {
+            double freq = std::pow(10000.0, -2.0 * (i / 2) / m_config.temporal_dim);
+            if (i % 2 == 0) {
+                data[i] = std::sin(period * freq);
+            } else {
+                data[i] = std::cos(period * freq);
+            }
+        }
+
+        return DoubleTensor({m_config.temporal_dim}, std::move(data));
+    }
+
+    /**
+     * Generate structural embedding based on graph structure.
+     */
+    DoubleTensor generate_structural_embedding(const Handle& atom)
+    {
+        std::vector<double> data(m_config.structural_dim, 0.0);
+
+        if (!atom) return DoubleTensor({m_config.structural_dim}, std::move(data));
+
+        // Encode structural features
+        auto incoming = get_incoming(atom);
+        data[0] = static_cast<double>(incoming.size());  // In-degree
+
+        if (atom->is_link()) {
+            data[1] = static_cast<double>(atom->arity());  // Out-degree for links
+        }
+
+        // Type encoding
+        data[2] = static_cast<double>(atom->type() % 100) / 100.0;
+
+        // Depth estimation (based on incoming links)
+        size_t depth = 0;
+        HandleSeq current = incoming;
+        while (!current.empty() && depth < 5) {
+            ++depth;
+            HandleSeq next;
+            for (const auto& h : current) {
+                auto inc = get_incoming(h);
+                next.insert(next.end(), inc.begin(), inc.end());
+            }
+            current = next;
+        }
+        data[3] = static_cast<double>(depth) / 5.0;
+
+        // Hash-based structural features
+        std::hash<std::string> hasher;
+        size_t hash = atom->is_node() ? hasher(atom->name()) : hasher(std::to_string(atom->arity()));
+        std::mt19937 gen(hash);
+        std::normal_distribution<double> dist(0.0, 0.1);
+        for (size_t i = 4; i < m_config.structural_dim; ++i) {
+            data[i] = dist(gen);
+        }
+
+        return DoubleTensor({m_config.structural_dim}, std::move(data));
+    }
+
+    /**
+     * Compute cosine similarity between two atoms.
+     */
+    double cosine_similarity(const Handle& atom1, const Handle& atom2, EmbeddingType type) const
+    {
+        auto emb1 = get_embedding(atom1, type);
+        auto emb2 = get_embedding(atom2, type);
+
+        if (!emb1 || !emb2) return 0.0;
+
+        return compute_similarity(*emb1, *emb2);
+    }
+
+    /**
+     * Find atoms similar to a given atom.
+     */
+    std::vector<std::pair<Handle, double>> find_similar(
+        const Handle& query_atom,
+        size_t top_k,
+        EmbeddingType type) const
+    {
+        auto query_emb = get_embedding(query_atom, type);
+        if (!query_emb) return {};
+
+        return find_similar(*query_emb, type, top_k);
+    }
+
+    /**
      * Find atoms similar to a query embedding.
      */
     std::vector<std::pair<Handle, double>> find_similar(
         const DoubleTensor& query_embedding,
         EmbeddingType type,
         size_t top_k = 10,
-        double threshold = 0.0)
+        double threshold = 0.0) const
     {
         std::vector<std::pair<Handle, double>> results;
 
@@ -210,6 +333,46 @@ public:
     }
 
     /**
+     * Compute attention scores between TensorAtoms.
+     */
+    DoubleTensor compute_attention(
+        const std::vector<std::shared_ptr<TensorNode>>& atoms,
+        const DoubleTensor& query,
+        EmbeddingType type)
+    {
+        std::vector<double> scores;
+
+        for (const auto& atom : atoms) {
+            if (!atom) {
+                scores.push_back(0.0);
+                continue;
+            }
+
+            auto emb = atom->get_embedding(type);
+            if (!emb) {
+                scores.push_back(0.0);
+                continue;
+            }
+
+            // Compute dot product score
+            auto flat_query = query.size() == query.shape()[0] ? query : query.flatten();
+            auto flat_emb = emb->tensor().size() == emb->tensor().shape()[0] ?
+                           emb->tensor() : emb->tensor().flatten();
+
+            double score = 0.0;
+            size_t min_size = std::min(flat_query.size(), flat_emb.size());
+            for (size_t i = 0; i < min_size; ++i) {
+                score += flat_query[i] * flat_emb[i];
+            }
+            scores.push_back(score);
+        }
+
+        // Softmax
+        auto scores_tensor = DoubleTensor({scores.size()}, std::move(scores));
+        return ops::softmax(scores_tensor);
+    }
+
+    /**
      * Aggregate embeddings using attention.
      */
     DoubleTensor attention_aggregate(const HandleSeq& atoms, const DoubleTensor& query)
@@ -241,6 +404,67 @@ public:
         }
 
         return result;
+    }
+
+    /**
+     * Aggregate embeddings using attention for TensorAtoms.
+     */
+    DoubleTensor attention_aggregate(
+        const std::vector<std::shared_ptr<TensorNode>>& atoms,
+        const DoubleTensor& query,
+        EmbeddingType type)
+    {
+        auto attention = compute_attention(atoms, query, type);
+
+        // Get embedding dimension from first atom with embedding
+        size_t emb_dim = 0;
+        for (const auto& atom : atoms) {
+            if (atom && atom->has_embedding(type)) {
+                emb_dim = atom->get_embedding(type)->dimension();
+                break;
+            }
+        }
+
+        if (emb_dim == 0) {
+            return DoubleTensor({1}, 0.0);
+        }
+
+        DoubleTensor result({emb_dim}, 0.0);
+
+        for (size_t i = 0; i < atoms.size(); ++i) {
+            if (!atoms[i]) continue;
+
+            auto emb = atoms[i]->get_embedding(type);
+            if (!emb) continue;
+
+            for (size_t j = 0; j < emb_dim; ++j) {
+                result[j] += attention[i] * emb->tensor()[j];
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Combine multiple embeddings by concatenation.
+     */
+    DoubleTensor combine_embeddings(const DoubleTensor& semantic,
+                                    const DoubleTensor& temporal,
+                                    const DoubleTensor& structural)
+    {
+        size_t total_size = semantic.size() + temporal.size() + structural.size();
+        std::vector<double> data;
+        data.reserve(total_size);
+
+        // Concatenate all embeddings
+        for (size_t i = 0; i < semantic.size(); ++i)
+            data.push_back(semantic[i]);
+        for (size_t i = 0; i < temporal.size(); ++i)
+            data.push_back(temporal[i]);
+        for (size_t i = 0; i < structural.size(); ++i)
+            data.push_back(structural[i]);
+
+        return DoubleTensor({total_size}, std::move(data));
     }
 
     /**

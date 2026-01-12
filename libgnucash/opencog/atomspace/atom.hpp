@@ -147,6 +147,14 @@ public:
      */
     virtual bool operator==(const Atom& other) const = 0;
 
+    /**
+     * Check inequality with another atom.
+     */
+    bool operator!=(const Atom& other) const
+    {
+        return !(*this == other);
+    }
+
 protected:
     Atom(AtomType type)
         : m_type(type)
