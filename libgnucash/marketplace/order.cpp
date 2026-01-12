@@ -1,0 +1,18 @@
+/*
+ * libgnucash/marketplace/order.cpp
+ *
+ * Order management implementation
+ *
+ * Copyright (C) 2024 GnuCash Developers
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+
+#include "order.hpp"
+
+namespace gnc {
+namespace marketplace {
+
+// Order management implementation (integrated into marketplace_engine.cpp)
+
+} // namespace marketplace
+} // namespace gnc
