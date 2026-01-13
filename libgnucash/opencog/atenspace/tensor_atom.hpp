@@ -247,6 +247,11 @@ private:
 };
 
 /**
+ * TensorAtom - type alias for TensorNode (for compatibility).
+ */
+using TensorAtom = TensorNode;
+
+/**
  * Factory functions for tensor atoms.
  */
 inline std::shared_ptr<TensorNode> create_tensor_node(AtomType type, const std::string& name)
@@ -261,14 +266,5 @@ inline std::shared_ptr<TensorLink> create_tensor_link(AtomType type, const Handl
 
 } // namespace atenspace
 } // namespace gnc
-
-namespace std {
-    template<>
-    struct hash<gnc::atenspace::EmbeddingType> {
-        size_t operator()(gnc::atenspace::EmbeddingType t) const {
-            return static_cast<size_t>(t);
-        }
-    };
-}
 
 #endif // GNC_ATENSPACE_TENSOR_ATOM_HPP

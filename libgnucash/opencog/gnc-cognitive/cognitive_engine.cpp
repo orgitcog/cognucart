@@ -250,7 +250,7 @@ CategorizationResult CognitiveEngine::categorize_transaction(const std::string& 
         }
 
         result.reasoning = "Based on ";
-        if (!vendor.empty() && m_vendor_categories.contains(vendor)) {
+        if (!vendor.empty() && m_vendor_categories.find(vendor) != m_vendor_categories.end()) {
             result.reasoning += "vendor history";
         } else if (!keywords.empty()) {
             result.reasoning += "keyword matching";
